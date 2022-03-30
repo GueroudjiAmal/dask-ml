@@ -138,7 +138,8 @@ class IncrementalPCA(pca.PCA):
         self.svd_solver = svd_solver
         self.iterated_power = iterated_power
         self.random_state = random_state
-        def _fit(self, X, y=None):
+        
+    def _fit(self, X, y=None):
         """Fit the model with X, using minibatches of size batch_size.
         Parameters
         ----------

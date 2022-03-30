@@ -473,15 +473,15 @@ class IncrementalPCA(pca.PCA):
                 self.singular_values_,
                 self.noise_variance_,
             ) = compute(
-                n_samples,
-                col_mean,
-                col_var,
-                n_features,
-                components[: self.n_components_],
-                explained_variance[: self.n_components_],
-                explained_variance_ratio[: self.n_components_],
-                singular_values[: self.n_components_],
-                noise_variance,
+                self.n_samples_,
+                self.mean_,
+                self.var_,
+                self.n_features_,
+                self.components_,
+                self.explained_variance_,
+                self.explained_variance_ratio_,
+                self.singular_values_,
+                self.noise_variance_,
             )
         except ValueError as e:
             if np.isnan([n_samples, n_features]).any():
@@ -672,5 +672,4 @@ class IncrementalPCA(pca.PCA):
         self.singular_values_= singular_values[: self.n_components_]
         self.noise_variance_= noise_variance
 
-        return self
 

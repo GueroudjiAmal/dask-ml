@@ -1,8 +1,4 @@
-"""Incremental Principal Components Analysis."""
-
-# Author: Kyle Kastner <kastnerkyle@gmail.com>
-#         Giorgio Patrini
-# License: BSD 3 clause
+"""In Situ Incremental Principal Components Analysis."""
 
 import dask
 import numpy as np
@@ -11,11 +7,12 @@ from dask import array as da, compute
 from dask.array import linalg
 from scipy import sparse
 from sklearn.utils import gen_batches
-from sklearn.utils.validation import check_random_state
+from sklearn.utils.validation import check_is_fitted, check_random_state
 
 from .._compat import DASK_2_26_0, DASK_2_28_0
 from .._utils import draw_seed
 from ..utils import check_array, svd_flip
+from . import incremental_pca
 from . import pca
 from .extmath import _incremental_mean_and_var
 
@@ -34,8 +31,10 @@ def svd_flip_fast(u, v):
     return u, v
 
 
-class IncrementalPCA(pca.PCA):
-    """Incremental principal components analysis (IPCA).
+class InSituIncrementalPCA(pca.PCA):
+    """Similar to Incremental principal components analysis (IPCA).
+    It process the first dimension of a dask array differently. It is
+    supposed to be the time dimension for in situ data.
     Linear dimensionality reduction using Singular Value Decomposition of
     the data, keeping only the most significant singular vectors to
     project the data to a lower dimensional space. The input data is centered
@@ -140,13 +139,18 @@ class IncrementalPCA(pca.PCA):
         self.iterated_power = iterated_power
         self.random_state = random_state
 
-    def _fit(self, X, y=None):
-        """Fit the model with X, using minibatches of size batch_size.
+    def fit(self, X, dim_labels, features, samples, y=None):
+        """Fit the model with X, incrementaly following the fisrt dimension
+        using minibatches of size batch_size.
         Parameters
         ----------
-        X : array-like or sparse matrix, shape (n_samples, n_features)
+        X : array-like or sparse matrix, that will be chunked (1, ...).
+            Each chunk's shape is  (n_samples, n_features)
             Training data, where n_samples is the number of samples and
             n_features is the number of features.
+        dim_labels: list of str that represent the labels of each dim in the array
+        features: list of str of the features dim
+        samples: list of str of the samples dim
         y : Ignored
         Returns
         -------
@@ -165,54 +169,82 @@ class IncrementalPCA(pca.PCA):
         self.singular_values_ = None
         self.noise_variance_ = None
 
-        X = check_array(
-            X,
-            accept_sparse=["csr", "csc", "lil"],
-            copy=self.copy,
-            dtype=[np.float64, np.float32],
-            accept_multiple_blocks=True,
-        )
-        n_samples, n_features = X.shape
+        for i in range(len(X)):
+            A = X[i].reshape(([1]+list(X[i].shape)))
+            A = xr.DataArray(A, dims = dim_labels)
+            A = A.stack(samples = samples)
+            A = A.stack(features = features)
+            A = A.data
+            A = check_array(
+                A,
+                accept_sparse=["csr", "csc", "lil"],
+                copy=self.copy,
+                dtype=[np.float64, np.float32],
+                accept_multiple_blocks=True,
+            )
 
-        if self.batch_size is None:
-            self.batch_size_ = 5 * n_features
-        else:
-            self.batch_size_ = self.batch_size
+            n_samples, n_features = A.shape
 
-        for batch in gen_batches(
-            n_samples, self.batch_size_, min_batch_size=self.n_components or 0
-        ):
-            X_batch = X[batch]
-            if sparse.issparse(X_batch):
-                X_batch = X_batch.toarray()
-            self.partial_fit(X_batch, check_input=False)
+            if self.batch_size is None:
+                self.batch_size_ = 5 * n_features
+            else:
+                self.batch_size_ = self.batch_size
 
+            for batch in gen_batches(
+                n_samples, self.batch_size_, min_batch_size=self.n_components or 0
+            ):
+                X_batch = A[batch]
+                if sparse.issparse(X_batch):
+                    X_batch = X_batch.toarray()
+                self.partial_fit_in_situ(X_batch, check_input=False)
+
+        try:
+            (
+                self.n_samples_,
+                self.mean_,
+                self.var_,
+                self.n_features_,
+                self.components_,
+                self.explained_variance_,
+                self.explained_variance_ratio_,
+                self.singular_values_,
+                self.noise_variance_,
+            ) = compute(
+                self.n_samples_,
+                self.mean_,
+                self.var_,
+                self.n_features_,
+                self.components_,
+                self.explained_variance_,
+                self.explained_variance_ratio_,
+                self.singular_values_,
+                self.noise_variance_,
+            )
+        except ValueError as e:
+            if np.isnan([n_samples, n_features]).any():
+                msg = (
+                    "Computation of the SVD raised an error. It is possible "
+                    "n_components is too large. i.e., "
+                    "`n_components > np.nanmin(X.shape) = "
+                    "np.nanmin({})`\n\n"
+                    "A possible resolution to this error is to ensure that "
+                    "n_components <= min(n_samples, n_features)"
+                )
+                raise ValueError(msg.format(X.shape)) from e
+            raise e
+
+        if len(self.singular_values_) < self.n_components_:
+            self.n_components_ = len(self.singular_values_)
+            msg = (
+                "n_components={n} is larger than the number of singular values"
+                " ({s}) (note: PCA has attributes as if n_components == {s})"
+            )
+            raise ValueError(
+                msg.format(n=self.n_components_, s=len(self.singular_values_))
+            )
         return self
 
-    def fit_transform(self, X, y=None):
-        """Fit the model with X and apply the dimensionality reduction on X.
-        Parameters
-        ----------
-        X : array-like, shape (n_samples, n_features)
-            New data, where n_samples in the number of samples
-            and n_features is the number of features.
-        y : Ignored
-        Returns
-        -------
-        X_new : array-like, shape (n_samples, n_components)
-        """
-        # X = check_array(X)
-        if not dask.is_dask_collection(X):
-            raise TypeError(pca.PCA._TYPE_MSG.format(type(X)))
-
-        if y is None:
-            # fit method of arity 1 (unsupervised transformation)
-            return self.fit(X).transform(X)
-        else:
-            # fit method of arity 2 (supervised transformation)
-            return self.fit(X, y).transform(X)
-
-    def partial_fit(self, X, y=None, check_input=True):
+    def partial_fit_in_situ(self, X, y=None, check_input=True):
         """Incremental fit with X. All of X is processed as a single batch.
         Parameters
         ----------
@@ -367,49 +399,75 @@ class IncrementalPCA(pca.PCA):
             noise_variance = 0.0
 
         self.n_samples_seen_ = n_total_samples
+        self.n_samples_ = n_samples
+        self.mean_= col_mean
+        self.var_= col_var
+        self.n_features_= n_features
+        self.components_= components[: self.n_components_]
+        self.explained_variance_= explained_variance[: self.n_components_]
+        self.explained_variance_ratio_= explained_variance_ratio[: self.n_components_]
+        self.singular_values_= singular_values[: self.n_components_]
+        self.noise_variance_= noise_variance
 
-        try:
-            (
-                self.n_samples_,
-                self.mean_,
-                self.var_,
-                self.n_features_,
-                self.components_,
-                self.explained_variance_,
-                self.explained_variance_ratio_,
-                self.singular_values_,
-                self.noise_variance_,
-            ) = compute(
-                n_samples,
-                col_mean,
-                col_var,
-                n_features,
-                components[: self.n_components_],
-                explained_variance[: self.n_components_],
-                explained_variance_ratio[: self.n_components_],
-                singular_values[: self.n_components_],
-                noise_variance,
-            )
-        except ValueError as e:
-            if np.isnan([n_samples, n_features]).any():
-                msg = (
-                    "Computation of the SVD raised an error. It is possible "
-                    "n_components is too large. i.e., "
-                    "`n_components > np.nanmin(X.shape) = "
-                    "np.nanmin({})`\n\n"
-                    "A possible resolution to this error is to ensure that "
-                    "n_components <= min(n_samples, n_features)"
-                )
-                raise ValueError(msg.format(X.shape)) from e
-            raise e
 
-        if len(self.singular_values_) < self.n_components_:
-            self.n_components_ = len(self.singular_values_)
-            msg = (
-                "n_components={n} is larger than the number of singular values"
-                " ({s}) (note: PCA has attributes as if n_components == {s})"
-            )
-            raise ValueError(
-                msg.format(n=self.n_components_, s=len(self.singular_values_))
-            )
-        return self
+    def transform(self, X, dim_labels, features, samples):
+        """Apply dimensionality reduction on X.
+
+        X is projected on the first principal components previous extracted
+        from a training set.
+
+        Parameters
+        ----------
+        X : array-like or sparse matrix, that will be chunked (1, ...).
+            Each chunk's shape is  (n_samples, n_features)
+            Training data, where n_samples is the number of samples and
+            n_features is the number of features.
+        dim_labels: list of str that represent the labels of each dim in the array
+        features: list of str of the features dim
+        samples: list of str of the samples dim
+        Returns
+        -------
+        X_new : array-like, shape (n_samples, n_components)
+
+        """
+        check_is_fitted(self, ["mean_", "components_"])
+
+        X = xr.DataArray(X, dims = dim_labels)
+        X = X.stack(samples = samples)
+        X = X.stack(features = features)
+        X = X.data
+        # X = check_array(X)
+        if self.mean_ is not None:
+            X = X - self.mean_
+        X_transformed = da.dot(X, self.components_.T)
+        if self.whiten:
+            X_transformed /= np.sqrt(self.explained_variance_)
+        return X_transformed
+
+    def fit_transform(self, X, dim_labels, features, samples, y=None):
+        """Fit the model with X and apply the dimensionality reduction on X.
+        Parameters
+        ----------
+        X : array-like or sparse matrix, that will be chunked (1, ...).
+            Each chunk's shape is  (n_samples, n_features)
+            Training data, where n_samples is the number of samples and
+            n_features is the number of features.
+        dim_labels: list of str that represent the labels of each dim in the array
+        features: list of str of the features dim
+        samples: list of str of the samples dim
+        y : Ignored
+        Returns
+        -------
+        X_new : array-like, shape (n_samples, n_components)
+        """
+        # X = check_array(X)
+        if not dask.is_dask_collection(X):
+            raise TypeError(pca.PCA._TYPE_MSG.format(type(X)))
+
+        if y is None:
+            # fit method of arity 1 (unsupervised transformation)
+            return self.fit(X, dim_labels, features, samples
+                      ).transform( X, dim_labels, features, samples)
+        else:
+            # fit method of arity 2 (supervised transformation)
+            return self.fit(X, y).transform(X)

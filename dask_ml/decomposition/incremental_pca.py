@@ -6,6 +6,7 @@
 
 import dask
 import numpy as np
+import xarray as xr
 from dask import array as da, compute
 from dask.array import linalg
 from scipy import sparse
@@ -138,7 +139,7 @@ class IncrementalPCA(pca.PCA):
         self.svd_solver = svd_solver
         self.iterated_power = iterated_power
         self.random_state = random_state
-        
+
     def _fit(self, X, y=None):
         """Fit the model with X, using minibatches of size batch_size.
         Parameters
@@ -411,17 +412,21 @@ class IncrementalPCA(pca.PCA):
             raise ValueError(
                 msg.format(n=self.n_components_, s=len(self.singular_values_))
             )
-
         return self
 
-    def _fit_in_situ(self, X, y=None):
-        """Fit the model with X, using minibatches of size batch_size.
+    def fit(self, X, dim_labels, features, samples, y=None):
+        """Fit the model with X, incrementaly following the fisrt dimension
+        using minibatches of size batch_size.
         Parameters
         ----------
-        X : array-like or sparse matrix, shape (n_samples, n_features)
+        X : array-like or sparse matrix, that will be chunked (1, ...).
+            Each chunk's shape is  (n_samples, n_features)
             Training data, where n_samples is the number of samples and
             n_features is the number of features.
         y : Ignored
+        dim_labels: list of str that represent the labels of each dim in the array
+        features: list of str of the features dim
+        samples: list of str of the samples dim
         Returns
         -------
         self : object
@@ -439,27 +444,34 @@ class IncrementalPCA(pca.PCA):
         self.singular_values_ = None
         self.noise_variance_ = None
 
-        X = check_array(
-            X,
-            accept_sparse=["csr", "csc", "lil"],
-            copy=self.copy,
-            dtype=[np.float64, np.float32],
-            accept_multiple_blocks=True,
-        )
-        n_samples, n_features = X.shape
+        for i in range(len(X)):
+            A = X[i].reshape(([1]+list(X[i].shape)))
+            A = xr.DataArray(A, dims = dim_labels)
+            A = A.stack(samples = samples)
+            A = A.stack(features = features)
+            A = A.data
+            A = check_array(
+                A,
+                accept_sparse=["csr", "csc", "lil"],
+                copy=self.copy,
+                dtype=[np.float64, np.float32],
+                accept_multiple_blocks=True,
+            )
 
-        if self.batch_size is None:
-            self.batch_size_ = 5 * n_features
-        else:
-            self.batch_size_ = self.batch_size
+            n_samples, n_features = A.shape
 
-        for batch in gen_batches(
-            n_samples, self.batch_size_, min_batch_size=self.n_components or 0
-        ):
-            X_batch = X[batch]
-            if sparse.issparse(X_batch):
-                X_batch = X_batch.toarray()
-            self.partial_fit_in_situ(X_batch, check_input=False)
+            if self.batch_size is None:
+                self.batch_size_ = 5 * n_features
+            else:
+                self.batch_size_ = self.batch_size
+
+            for batch in gen_batches(
+                n_samples, self.batch_size_, min_batch_size=self.n_components or 0
+            ):
+                X_batch = A[batch]
+                if sparse.issparse(X_batch):
+                    X_batch = X_batch.toarray()
+                self.partial_fit_in_situ(X_batch, check_input=False)
 
         try:
             (
@@ -506,7 +518,7 @@ class IncrementalPCA(pca.PCA):
                 msg.format(n=self.n_components_, s=len(self.singular_values_))
             )
         return self
-        
+
     def partial_fit_in_situ(self, X, y=None, check_input=True):
         """Incremental fit with X. All of X is processed as a single batch.
         Parameters
@@ -671,5 +683,3 @@ class IncrementalPCA(pca.PCA):
         self.explained_variance_ratio_= explained_variance_ratio[: self.n_components_]
         self.singular_values_= singular_values[: self.n_components_]
         self.noise_variance_= noise_variance
-
-

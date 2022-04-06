@@ -33,7 +33,7 @@ def svd_flip_fast(u, v):
 
 class InSituIncrementalPCA(pca.PCA):
     """Similar to Incremental principal components analysis (IPCA).
-    It process the first dimension of a dask array differently. It is
+    It processes the first dimension of a dask array differently. It is
     supposed to be the time dimension for in situ data.
     Linear dimensionality reduction using Singular Value Decomposition of
     the data, keeping only the most significant singular vectors to
@@ -144,10 +144,9 @@ class InSituIncrementalPCA(pca.PCA):
         using minibatches of size batch_size.
         Parameters
         ----------
-        X : array-like or sparse matrix, that will be chunked (1, ...).
-            Each chunk's shape is  (n_samples, n_features)
-            Training data, where n_samples is the number of samples and
-            n_features is the number of features.
+        X : array-like or sparse matrix, that will be chunked N chunks in
+            the first dimention, where N is len(X).
+            Then each chunk's shape will be (n_samples, n_features)
         dim_labels: list of str that represent the labels of each dim in the array
         features: list of str of the features dim
         samples: list of str of the samples dim
@@ -418,10 +417,9 @@ class InSituIncrementalPCA(pca.PCA):
 
         Parameters
         ----------
-        X : array-like or sparse matrix, that will be chunked (1, ...).
-            Each chunk's shape is  (n_samples, n_features)
-            Training data, where n_samples is the number of samples and
-            n_features is the number of features.
+        X : array-like or sparse matrix, that will be chunked N chunks in
+            the first dimention, where N is len(X).
+            Then each chunk's shape will be (n_samples, n_features)
         dim_labels: list of str that represent the labels of each dim in the array
         features: list of str of the features dim
         samples: list of str of the samples dim
@@ -448,10 +446,9 @@ class InSituIncrementalPCA(pca.PCA):
         """Fit the model with X and apply the dimensionality reduction on X.
         Parameters
         ----------
-        X : array-like or sparse matrix, that will be chunked (1, ...).
-            Each chunk's shape is  (n_samples, n_features)
-            Training data, where n_samples is the number of samples and
-            n_features is the number of features.
+        X : array-like or sparse matrix, that will be chunked N chunks in
+            the first dimention, where N is len(X).
+            Then each chunk's shape will be (n_samples, n_features)
         dim_labels: list of str that represent the labels of each dim in the array
         features: list of str of the features dim
         samples: list of str of the samples dim

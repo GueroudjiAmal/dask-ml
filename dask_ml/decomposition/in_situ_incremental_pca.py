@@ -152,8 +152,16 @@ class InSituIncrementalPCA(pca.PCA):
         y : Ignored
         Returns
         -------
-        self : object
-            Returns the instance itself.
+        self : tuple
+            Returns self.mean_,
+                    self.var_,
+                    self.components_,
+                    self.explained_variance_,
+                    self.explained_variance_ratio_,
+                    self.singular_values_,
+                    self.noise_variance_,
+                    self.n_samples,
+                    self.n_features
         """
         self.components_ = None
         self.n_samples_seen_ = 0
@@ -182,7 +190,6 @@ class InSituIncrementalPCA(pca.PCA):
             )
 
             n_samples, n_features = A.shape
-
             if self.batch_size is None:
                 self.batch_size_ = 5 * n_features
             else:
@@ -197,13 +204,15 @@ class InSituIncrementalPCA(pca.PCA):
                 self.partial_fit_in_situ(X_batch, check_input=False)
 
         return (
-        self.mean_,
-        self.var_,
-        self.components_,
-        self.explained_variance_,
-        self.explained_variance_ratio_,
-        self.singular_values_,
-        self.noise_variance_,)
+            self.mean_,
+            self.var_,
+            self.components_,
+            self.explained_variance_,
+            self.explained_variance_ratio_,
+            self.singular_values_,
+            self.noise_variance_,
+            self.n_samples,
+            self.n_features)
 
     def partial_fit_in_situ(self, X, y=None, check_input=True):
         """Incremental fit with X. All of X is processed as a single batch.
@@ -234,6 +243,7 @@ class InSituIncrementalPCA(pca.PCA):
                 accept_multiple_blocks=True,
             )
         n_samples, n_features = X.shape
+        X = X.rechunk(("auto", n_features))
         if not hasattr(self, "components_"):
             self.components_ = None
 
@@ -360,6 +370,8 @@ class InSituIncrementalPCA(pca.PCA):
             noise_variance = 0.0
 
         self.n_samples_seen_ = n_total_samples
+        self.n_features = n_features
+        self.n_samples = n_samples
         self.mean_= col_mean
         self.var_= col_var
         self.components_= components[: self.n_components_]

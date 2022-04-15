@@ -12,7 +12,6 @@ from sklearn.utils.validation import check_is_fitted, check_random_state
 from .._compat import DASK_2_26_0, DASK_2_28_0
 from .._utils import draw_seed
 from ..utils import check_array, svd_flip
-from . import incremental_pca
 from . import pca
 from .extmath import _incremental_mean_and_var
 
@@ -196,7 +195,7 @@ class InSituIncrementalPCA(pca.PCA):
                 if sparse.issparse(X_batch):
                     X_batch = X_batch.toarray()
                 self.partial_fit_in_situ(X_batch, check_input=False)
-        """
+
         try:
             (
                 self.n_samples_,
@@ -218,6 +217,7 @@ class InSituIncrementalPCA(pca.PCA):
                 self.explained_variance_ratio_,
                 self.singular_values_,
                 self.noise_variance_,
+                release=True,
             )
         except ValueError as e:
             if np.isnan([n_samples, n_features]).any():
@@ -242,16 +242,15 @@ class InSituIncrementalPCA(pca.PCA):
                 msg.format(n=self.n_components_, s=len(self.singular_values_))
             )
         """
-        return (self.n_samples_,
-                self.mean_,
+        return (self.mean_,
                 self.var_,
-                self.n_features_,
                 self.components_,
                 self.explained_variance_,
                 self.explained_variance_ratio_,
                 self.singular_values_,
                 self.noise_variance_,)
-
+        """
+        return self
     def partial_fit_in_situ(self, X, y=None, check_input=True):
         """Incremental fit with X. All of X is processed as a single batch.
         Parameters
@@ -407,10 +406,8 @@ class InSituIncrementalPCA(pca.PCA):
             noise_variance = 0.0
 
         self.n_samples_seen_ = n_total_samples
-        self.n_samples_ = n_samples
         self.mean_= col_mean
         self.var_= col_var
-        self.n_features_= n_features
         self.components_= components[: self.n_components_]
         self.explained_variance_= explained_variance[: self.n_components_]
         self.explained_variance_ratio_= explained_variance_ratio[: self.n_components_]

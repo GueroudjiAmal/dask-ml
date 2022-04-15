@@ -197,51 +197,14 @@ class InSituIncrementalPCA(pca.PCA):
                     X_batch = X_batch.toarray()
                 self.partial_fit_in_situ(X_batch, check_input=False)
 
-        try:
-            (
-                self.n_samples_,
-                self.mean_,
-                self.var_,
-                self.n_features_,
-                self.components_,
-                self.explained_variance_,
-                self.explained_variance_ratio_,
-                self.singular_values_,
-                self.noise_variance_,
-            ) = compute(
-                self.n_samples_,
-                self.mean_,
-                self.var_,
-                self.n_features_,
-                self.components_,
-                self.explained_variance_,
-                self.explained_variance_ratio_,
-                self.singular_values_,
-                self.noise_variance_,
-            )
-        except ValueError as e:
-            if np.isnan([n_samples, n_features]).any():
-                msg = (
-                    "Computation of the SVD raised an error. It is possible "
-                    "n_components is too large. i.e., "
-                    "`n_components > np.nanmin(X.shape) = "
-                    "np.nanmin({})`\n\n"
-                    "A possible resolution to this error is to ensure that "
-                    "n_components <= min(n_samples, n_features)"
-                )
-                raise ValueError(msg.format(X.shape)) from e
-            raise e
-
-        if len(self.singular_values_) < self.n_components_:
-            self.n_components_ = len(self.singular_values_)
-            msg = (
-                "n_components={n} is larger than the number of singular values"
-                " ({s}) (note: PCA has attributes as if n_components == {s})"
-            )
-            raise ValueError(
-                msg.format(n=self.n_components_, s=len(self.singular_values_))
-            )
-        return self
+        return (
+        self.mean_,
+        self.var_,
+        self.components_,
+        self.explained_variance_,
+        self.explained_variance_ratio_,
+        self.singular_values_,
+        self.noise_variance_,)
 
     def partial_fit_in_situ(self, X, y=None, check_input=True):
         """Incremental fit with X. All of X is processed as a single batch.
@@ -398,10 +361,8 @@ class InSituIncrementalPCA(pca.PCA):
             noise_variance = 0.0
 
         self.n_samples_seen_ = n_total_samples
-        self.n_samples_ = n_samples
         self.mean_= col_mean
         self.var_= col_var
-        self.n_features_= n_features
         self.components_= components[: self.n_components_]
         self.explained_variance_= explained_variance[: self.n_components_]
         self.explained_variance_ratio_= explained_variance_ratio[: self.n_components_]
@@ -463,8 +424,9 @@ class InSituIncrementalPCA(pca.PCA):
 
         if y is None:
             # fit method of arity 1 (unsupervised transformation)
-            return self.fit(X, dim_labels, features, samples
-                      ).transform( X, dim_labels, features, samples)
+            self.fit(X, dim_labels, features, samples)
+            return self.transform( X, dim_labels, features, samples)
         else:
             # fit method of arity 2 (supervised transformation)
-            return self.fit(X, y).transform(X)
+            self.fit(X, y)
+            return self.transform(X)

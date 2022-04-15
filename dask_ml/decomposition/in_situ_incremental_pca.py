@@ -12,7 +12,6 @@ from sklearn.utils.validation import check_is_fitted, check_random_state
 from .._compat import DASK_2_26_0, DASK_2_28_0
 from .._utils import draw_seed
 from ..utils import check_array, svd_flip
-from . import incremental_pca
 from . import pca
 from .extmath import _incremental_mean_and_var
 

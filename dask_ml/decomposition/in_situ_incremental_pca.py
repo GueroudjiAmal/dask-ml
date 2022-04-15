@@ -196,7 +196,7 @@ class InSituIncrementalPCA(pca.PCA):
                 if sparse.issparse(X_batch):
                     X_batch = X_batch.toarray()
                 self.partial_fit_in_situ(X_batch, check_input=False)
-
+        """
         try:
             (
                 self.n_samples_,
@@ -241,7 +241,16 @@ class InSituIncrementalPCA(pca.PCA):
             raise ValueError(
                 msg.format(n=self.n_components_, s=len(self.singular_values_))
             )
-        return self
+        """
+        return (self.n_samples_,
+                self.mean_,
+                self.var_,
+                self.n_features_,
+                self.components_,
+                self.explained_variance_,
+                self.explained_variance_ratio_,
+                self.singular_values_,
+                self.noise_variance_,)
 
     def partial_fit_in_situ(self, X, y=None, check_input=True):
         """Incremental fit with X. All of X is processed as a single batch.

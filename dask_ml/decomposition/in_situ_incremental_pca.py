@@ -142,9 +142,12 @@ class InSituIncrementalPCA(pca.PCA):
         """Fit the model with X, using minibatches of size batch_size.
         Parameters
         ----------
-        X : array-like or sparse matrix, shape (n_samples, n_features)
+        X : array-like or sparse matrix, shape (n_timesteps, n_samples, n_features)
             Training data, where n_samples is the number of samples and
             n_features is the number of features.
+        lables : list of dimension labels, len(labels) =  1 + len(samples) + len(features)
+        features :  list of samples features
+        features : list of feature lables
         y : Ignored
         Returns
         -------
@@ -187,8 +190,7 @@ class InSituIncrementalPCA(pca.PCA):
                 dtype=[np.float64, np.float32],
                 accept_multiple_blocks=True,
             )
-            X_batch = X_batch.rechunk((1,"auto"))
-            print(X_batch)
+            X_batch = X_batch.rechunk(({1:-1}))
             self.partial_fit_in_situ(X_batch, check_input=False)
 
         return (
@@ -366,9 +368,9 @@ class InSituIncrementalPCA(pca.PCA):
         self.explained_variance_ratio_= explained_variance_ratio[: self.n_components_]
         self.singular_values_= singular_values[: self.n_components_]
         self.noise_variance_= noise_variance
+        return self
 
-
-    def transform(self, X, dim_labels, features, samples):
+    def transform(self, X, labels, samples, features):
         """Apply dimensionality reduction on X.
 
         X is projected on the first principal components previous extracted
@@ -376,12 +378,12 @@ class InSituIncrementalPCA(pca.PCA):
 
         Parameters
         ----------
-        X : array-like or sparse matrix, that will be chunked N chunks in
-            the first dimention, where N is len(X).
-            Then each chunk's shape will be (n_samples, n_features)
-        dim_labels: list of str that represent the labels of each dim in the array
-        features: list of str of the features dim
-        samples: list of str of the samples dim
+        X : array-like or sparse matrix, shape (n_timesteps, n_samples, n_features)
+            Training data, where n_samples is the number of samples and
+            n_features is the number of features.
+        lables : list of dimension labels, len(labels) =  1 + len(samples) + len(features)
+        features :  list of samples features
+        features : list of feature lables
         Returns
         -------
         X_new : array-like, shape (n_samples, n_components)
@@ -389,28 +391,33 @@ class InSituIncrementalPCA(pca.PCA):
         """
         check_is_fitted(self, ["mean_", "components_"])
 
-        X = xr.DataArray(X, dims = dim_labels)
+        X = xr.DataArray(X, dims = labels)
         X = X.stack(samples = samples)
         X = X.stack(features = features)
-        X = X.data
+        A = X.data
         # X = check_array(X)
-        if self.mean_ is not None:
-            X = X - self.mean_
-        X_transformed = da.dot(X, self.components_.T)
-        if self.whiten:
-            X_transformed /= np.sqrt(self.explained_variance_)
-        return X_transformed
+        n_timesteps, n_samples, n_features = A.shape
+        X_transformed_list = []
+        for i in range(n_timesteps):
+            X = A[i]
+            if self.mean_ is not None:
+                X = X - self.mean_
+            X_transformed = da.dot(X, self.components_.T)
+            if self.whiten:
+                X_transformed /= np.sqrt(self.explained_variance_)
+            X_transformed_list.append(X_transformed)
+        return da.concatenate(X_transformed_list)
 
-    def fit_transform(self, X, dim_labels, features, samples, y=None):
+    def fit_transform(self, X, labels, samples, features, y=None):
         """Fit the model with X and apply the dimensionality reduction on X.
         Parameters
         ----------
-        X : array-like or sparse matrix, that will be chunked N chunks in
-            the first dimention, where N is len(X).
-            Then each chunk's shape will be (n_samples, n_features)
-        dim_labels: list of str that represent the labels of each dim in the array
-        features: list of str of the features dim
-        samples: list of str of the samples dim
+        X : array-like or sparse matrix, shape (n_timesteps, n_samples, n_features)
+            Training data, where n_samples is the number of samples and
+            n_features is the number of features.
+        lables : list of dimension labels, len(labels) =  1 + len(samples) + len(features)
+        features :  list of samples features
+        features : list of feature lables
         y : Ignored
         Returns
         -------
@@ -422,8 +429,8 @@ class InSituIncrementalPCA(pca.PCA):
 
         if y is None:
             # fit method of arity 1 (unsupervised transformation)
-            self.fit(X, dim_labels, features, samples)
-            return self.transform( X, dim_labels, features, samples)
+            self.fit(X, labels, samples, features)
+            return self.transform( X, labels, samples, features)
         else:
             # fit method of arity 2 (supervised transformation)
             self.fit(X, y)

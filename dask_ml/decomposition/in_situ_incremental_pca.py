@@ -138,30 +138,25 @@ class InSituIncrementalPCA(pca.PCA):
         self.iterated_power = iterated_power
         self.random_state = random_state
 
-    def fit(self, X, dim_labels, features, samples, y=None):
-        """Fit the model with X, incrementaly following the fisrt dimension
-        using minibatches of size batch_size.
+    def fit(self, X, labels, samples ,features , y=None):
+        """Fit the model with X, using minibatches of size batch_size.
         Parameters
         ----------
-        X : array-like or sparse matrix, that will be chunked N chunks in
-            the first dimention, where N is len(X).
-            Then each chunk's shape will be (n_samples, n_features)
-        dim_labels: list of str that represent the labels of each dim in the array
-        features: list of str of the features dim
-        samples: list of str of the samples dim
+        X : array-like or sparse matrix, shape (n_samples, n_features)
+            Training data, where n_samples is the number of samples and
+            n_features is the number of features.
         y : Ignored
         Returns
         -------
-        self : tuple
-            Returns self.mean_,
-                    self.var_,
-                    self.components_,
-                    self.explained_variance_,
-                    self.explained_variance_ratio_,
-                    self.singular_values_,
-                    self.noise_variance_,
-                    self.n_samples,
-                    self.n_features
+        tuple : (self.mean_,
+                self.var_,
+                self.components_,
+                self.explained_variance_,
+                self.explained_variance_ratio_,
+                self.singular_values_,
+                self.noise_variance_,
+                self.n_samples,
+                self.n_features)
         """
         self.components_ = None
         self.n_samples_seen_ = 0
@@ -175,33 +170,26 @@ class InSituIncrementalPCA(pca.PCA):
         self.singular_values_ = None
         self.noise_variance_ = None
 
-        for i in range(len(X)):
-            A = X[i].reshape(([1]+list(X[i].shape)))
-            A = xr.DataArray(A, dims = dim_labels)
-            A = A.stack(samples = samples)
-            A = A.stack(features = features)
-            A = A.data
-            A = check_array(
-                A,
+
+        xda = xr.DataArray(X, dims = labels)
+        xda = xda.stack(samples = samples)
+        xda = xda.stack(features = features)
+        A = xda.data
+
+        n_timesteps, n_samples, n_features = A.shape
+
+        for i in range(n_timesteps):
+            X_batch = A[i]
+            X_batch = check_array(
+                X_batch,
                 accept_sparse=["csr", "csc", "lil"],
                 copy=self.copy,
                 dtype=[np.float64, np.float32],
                 accept_multiple_blocks=True,
             )
-
-            n_samples, n_features = A.shape
-            if self.batch_size is None:
-                self.batch_size_ = 5 * n_features
-            else:
-                self.batch_size_ = self.batch_size
-
-            for batch in gen_batches(
-                n_samples, self.batch_size_, min_batch_size=self.n_components or 0
-            ):
-                X_batch = A[batch]
-                if sparse.issparse(X_batch):
-                    X_batch = X_batch.toarray()
-                self.partial_fit_in_situ(X_batch, check_input=False)
+            X_batch = X_batch.rechunk((1,"auto"))
+            print(X_batch)
+            self.partial_fit_in_situ(X_batch, check_input=False)
 
         return (
             self.mean_,
@@ -243,7 +231,6 @@ class InSituIncrementalPCA(pca.PCA):
                 accept_multiple_blocks=True,
             )
         n_samples, n_features = X.shape
-        X = X.rechunk(("auto", n_features))
         if not hasattr(self, "components_"):
             self.components_ = None
 

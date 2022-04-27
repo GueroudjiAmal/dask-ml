@@ -173,12 +173,10 @@ class InSituIncrementalPCA(pca.PCA):
         self.singular_values_ = None
         self.noise_variance_ = None
 
-
         xda = xr.DataArray(X, dims = labels)
         xda = xda.stack(samples = samples)
         xda = xda.stack(features = features)
         A = xda.data
-
         n_timesteps, n_samples, n_features = A.shape
 
         for i in range(n_timesteps):
@@ -190,7 +188,7 @@ class InSituIncrementalPCA(pca.PCA):
                 dtype=[np.float64, np.float32],
                 accept_multiple_blocks=True,
             )
-            X_batch = X_batch.rechunk(({1:-1}))
+            #print("X_batch",X_batch)
             self.partial_fit_in_situ(X_batch, check_input=False)
 
         return (

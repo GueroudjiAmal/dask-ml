@@ -15,7 +15,7 @@ from distributed.utils_test import (  # noqa: F401
 )
 from sklearn.linear_model import SGDClassifier
 
-from dask_ml._compat import DISTRIBUTED_2_5_0
+from dask_ml._compat import DISTRIBUTED_2_5_0, SK_LOG_LOSS
 from dask_ml.datasets import make_classification
 from dask_ml.model_selection import (
     HyperbandSearchCV,
@@ -53,12 +53,12 @@ async def test_basic(c, s, a, b, array_type, library, max_iter):
         X, y = await c.gather(futures)
 
     params = {
-        "loss": ["hinge", "log", "modified_huber", "squared_hinge", "perceptron"],
+        "loss": ["hinge", SK_LOG_LOSS, "modified_huber", "squared_hinge", "perceptron"],
         "average": [True, False],
         "learning_rate": ["constant", "invscaling", "optimal"],
         "eta0": np.logspace(-2, 0, num=1000),
     }
-    model = SGDClassifier(tol=-np.inf, penalty="elasticnet", random_state=42, eta0=0.1)
+    model = SGDClassifier(tol=10, penalty="elasticnet", random_state=42, eta0=0.1)
     if library == "dask-ml":
         model = Incremental(model)
         params = {"estimator__" + k: v for k, v in params.items()}

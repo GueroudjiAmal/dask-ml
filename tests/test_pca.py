@@ -28,7 +28,7 @@ def test_basic():
     b = sd.PCA()
     a.fit(dX)
     b.fit(X)
-    assert_estimator_equal(a, b, exclude=["components_"])
+    assert_estimator_equal(a, b, exclude=["components_", "n_features_"])
     np.testing.assert_allclose(
         flip_vector_signs(a.components_, 1), flip_vector_signs(b.components_, 1)
     )
@@ -263,24 +263,24 @@ def test_singular_values():
     X_apca = apca.transform(dX)
     X_rpca = rpca.transform(dX)
     assert_array_almost_equal(
-        np.sum(pca.singular_values_ ** 2.0), np.linalg.norm(X_pca, "fro") ** 2.0, 12
+        np.sum(pca.singular_values_**2.0), np.linalg.norm(X_pca, "fro") ** 2.0, 12
     )
     assert_array_almost_equal(
-        np.sum(apca.singular_values_ ** 2.0), np.linalg.norm(X_apca, "fro") ** 2.0, 9
+        np.sum(apca.singular_values_**2.0), np.linalg.norm(X_apca, "fro") ** 2.0, 9
     )
     assert_array_almost_equal(
-        np.sum(rpca.singular_values_ ** 2.0), np.linalg.norm(X_rpca, "fro") ** 2.0, 0
+        np.sum(rpca.singular_values_**2.0), np.linalg.norm(X_rpca, "fro") ** 2.0, 0
     )
 
     # Compare to the 2-norms of the score vectors
     assert_array_almost_equal(
-        pca.singular_values_, np.sqrt(np.sum(X_pca ** 2.0, axis=0)), 12
+        pca.singular_values_, np.sqrt(np.sum(X_pca**2.0, axis=0)), 12
     )
     assert_array_almost_equal(
-        apca.singular_values_, np.sqrt(np.sum(X_apca ** 2.0, axis=0)), 12
+        apca.singular_values_, np.sqrt(np.sum(X_apca**2.0, axis=0)), 12
     )
     assert_array_almost_equal(
-        rpca.singular_values_, np.sqrt(np.sum(X_rpca ** 2.0, axis=0)), 2
+        rpca.singular_values_, np.sqrt(np.sum(X_rpca**2.0, axis=0)), 2
     )
 
 
@@ -301,7 +301,7 @@ def test_singular_values_wide():
     rpca = dd.PCA(n_components=3, svd_solver="randomized", random_state=rng)
     X_pca = pca.fit_transform(X)
 
-    X_pca /= np.sqrt(np.sum(X_pca ** 2.0, axis=0))
+    X_pca /= np.sqrt(np.sum(X_pca**2.0, axis=0))
     X_pca[:, 0] *= 3.142
     X_pca[:, 1] *= 2.718
 
@@ -327,7 +327,7 @@ def test_pca_check_projection():
 
     for solver in solver_list:
         Yt = dd.PCA(n_components=2, svd_solver=solver).fit(dX).transform(dXt)
-        Yt /= np.sqrt((Yt ** 2).sum())
+        Yt /= np.sqrt((Yt**2).sum())
 
         assert_almost_equal(np.abs(Yt[0][0]), 1.0, 1)
 
@@ -412,7 +412,7 @@ def test_randomized_pca_check_projection():
         .fit(X)
         .transform(dXt)
     )
-    Yt /= np.sqrt((Yt ** 2).sum())
+    Yt /= np.sqrt((Yt**2).sum())
 
     assert_almost_equal(np.abs(Yt[0][0]), 1.0, 1)
 
@@ -552,7 +552,7 @@ def test_pca_score():
         pca = dd.PCA(n_components=2, svd_solver=solver)
         pca.fit(dX)
         ll1 = pca.score(dX)
-        h = -0.5 * np.log(2 * np.pi * np.exp(1) * 0.1 ** 2) * p
+        h = -0.5 * np.log(2 * np.pi * np.exp(1) * 0.1**2) * p
         np.testing.assert_almost_equal(ll1 / h, 1, 0)
 
 
@@ -742,7 +742,7 @@ def test_unknown_shapes(fn, solver):
         X_hat = fit_fn(X)
         assert hasattr(pca, "components_")
         assert pca.n_components_ == 2
-        assert pca.n_features_ == 3
+        assert pca.n_features_in_ == 3
         assert pca.n_samples_ == 10
         if fn == "fit_transform":
             assert np.isnan(X_hat.shape[0])
@@ -768,7 +768,7 @@ def test_unknown_shapes_n_components_larger_than_num_rows(solver):
         assert pca.n_components_ == 2
         assert len(pca.singular_values_) == 2
         assert len(pca.components_) == 2
-        assert pca.n_features_ == 10
+        assert pca.n_features_in_ == 10
         assert pca.n_samples_ == 2
         if solver != "randomized":
             assert pca.explained_variance_ratio_.max() == 1.0

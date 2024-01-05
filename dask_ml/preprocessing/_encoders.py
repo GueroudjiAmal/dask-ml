@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import sklearn.preprocessing
 
+from .._compat import SKLEARN_1_1_X
 from .._typing import ArrayLike, DataFrameType, DTypeLike, SeriesType
 from ..base import DaskMLBaseMixin
 from ..utils import check_array
@@ -58,7 +59,7 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
     drop : None, default=None
         The option to drop one of the categories per feature is not yet supported.
 
-    sparse : boolean, default=True
+    sparse_output : boolean, default=True
         Will return sparse matrix if set True else will return an array.
 
     dtype : number type, default=np.float64
@@ -98,7 +99,7 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
     ... # doctest: +ELLIPSIS
     OneHotEncoder(categorical_features=None, categories=None,
            dtype=<... 'numpy.float64'>, handle_unknown='error',
-           n_values=None, sparse=True)
+           n_values=None, sparse_output=True)
 
     >>> enc.categories_
     [array(['A', 'B', 'C'], dtype='<U1')]
@@ -115,7 +116,7 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
         categorical_features: Optional[pd.Categorical] = None,
         categories: Union[str, ArrayLike] = "auto",
         drop: Optional[bool] = None,
-        sparse: bool = True,
+        sparse_output: bool = True,
         dtype: DTypeLike = np.float64,
         handle_unknown: str = "error",
     ):
@@ -123,14 +124,21 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
             raise NotImplementedError("drop != None is not implemented yet.")
         super(OneHotEncoder, self).__init__(
             categories=categories,
-            sparse=sparse,
+            sparse_output=sparse_output,
             dtype=dtype,
             handle_unknown=handle_unknown,
         )
 
     @classmethod
     def _get_param_names(cls: Any) -> List[str]:
-        return ["categories", "drop", "dtype", "sparse", "dtype", "handle_unknown"]
+        return [
+            "categories",
+            "drop",
+            "dtype",
+            "sparse_output",
+            "dtype",
+            "handle_unknown",
+        ]
 
     def get_params(self, deep: bool = True):
         return super().get_params(deep)
@@ -160,6 +168,7 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
         X: Union[ArrayLike, DataFrameType],
         handle_unknown: str = "error",
         force_all_finite: bool = True,
+        return_counts=False,
     ):
         X = self._validate_data(
             X, accept_dask_dataframe=True, dtype=None, preserve_pandas_dataframe=True
@@ -168,8 +177,18 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
         self._check_feature_names(X, reset=True)
 
         if isinstance(X, np.ndarray):
+            kwargs = {
+                "handle_unknown": handle_unknown,
+                "force_all_finite": force_all_finite,
+            }
+
+            # `return_counts` expected as of scikit-learn 1.1
+            if SKLEARN_1_1_X:
+                kwargs["return_counts"] = return_counts
+
             return super(OneHotEncoder, self)._fit(
-                X, handle_unknown=handle_unknown, force_all_finite=force_all_finite
+                X,
+                **kwargs,
             )
 
         is_array = isinstance(X, da.Array)
@@ -257,7 +276,7 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
             ]
             X = da.concatenate(Xs, axis=1)
 
-            if not self.sparse:
+            if not self.sparse_output:
                 X = X.map_blocks(lambda x: x.toarray(), dtype=self.dtype)
 
         else:
@@ -282,6 +301,6 @@ class OneHotEncoder(DaskMLBaseMixin, sklearn.preprocessing.OneHotEncoder):
                         "Different CategoricalDtype for fit and transform. "
                         "{!r} != {!r}".format(Xi.dtype, dtype)
                     )
-            return dd.get_dummies(X, sparse=self.sparse, dtype=self.dtype)
+            return dd.get_dummies(X, sparse=self.sparse_output, dtype=self.dtype)
 
         return X

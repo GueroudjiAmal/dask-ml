@@ -1,6 +1,18 @@
 Changelog
 =========
 
+Version 2023.3.24
+~~~~~~~~~~~~~~~~~
+
+* Compatibility with Python 3.10
+* Dropped support for Python 3.7
+* Compatibility with scikit-learn 1.2.0 and newer
+
+Version 2022.5.27
+~~~~~~~~~~~~~~~~~
+
+* Compatibility with scikit-learn 1.1 and newer (:pr:`910`)
+
 Version 2021.11.30
 ~~~~~~~~~~~~~~~~~~
 

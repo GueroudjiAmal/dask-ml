@@ -567,7 +567,7 @@ def test_pandas_input():
     # check cross_val_score doesn't destroy pandas dataframe
     types = [(MockDataFrame, MockDataFrame)]
     try:
-        from pandas import Series, DataFrame
+        from pandas import DataFrame, Series
 
         types.append((DataFrame, Series))
     except ImportError:
@@ -593,7 +593,7 @@ def test_pandas_input():
 def test_unsupervised_grid_search():
     # test grid-search with unsupervised estimator
     X, y = make_blobs(random_state=0)
-    km = KMeans(random_state=0)
+    km = KMeans(random_state=0, n_init="auto")
     grid_search = dcv.GridSearchCV(
         km, param_grid=dict(n_clusters=[2, 3, 4]), scoring="adjusted_rand_score"
     )

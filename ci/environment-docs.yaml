@@ -19,9 +19,9 @@ dependencies:
   - numpydoc
   - pandas
   - psutil
-  - python=3.8
+  - python=3.10
   - sortedcontainers
-  - scikit-learn>=1.0.0
+  - scikit-learn >=1.2.0
   - scipy
   - sparse
   - sphinx
@@ -29,12 +29,11 @@ dependencies:
   - sphinx-gallery
   - tornado
   - toolz
-  - xgboost
   - zict
   - pip
   - dask
   - dask-glm
   - dask-xgboost
   - pip:
-    - dask_sphinx_theme >=1.1.0
+    - dask-sphinx-theme >=3.0.0
     - graphviz

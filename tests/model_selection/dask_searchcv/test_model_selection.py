@@ -16,7 +16,7 @@ from dask.callbacks import Callback
 from dask.delayed import delayed
 from dask.utils import tmpdir
 from distributed import Client, Nanny, Variable
-from distributed.utils_test import cluster, loop  # noqa
+from distributed.utils_test import cleanup, cluster, loop, loop_in_thread  # noqa
 from sklearn.datasets import load_iris, make_classification
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier
@@ -445,7 +445,12 @@ def test_pipeline_sub_estimators():
         },
     ]
 
-    gs = GridSearchCV(pipe, param_grid=param_grid, return_train_score=True, cv=3,)
+    gs = GridSearchCV(
+        pipe,
+        param_grid=param_grid,
+        return_train_score=True,
+        cv=3,
+    )
     gs.fit(X, y)
     dgs = dcv.GridSearchCV(
         pipe, param_grid=param_grid, scheduler="sync", return_train_score=True, cv=3
@@ -946,7 +951,11 @@ def test_gridsearch_with_arraylike_fit_param(cache_cv):
     param_grid = {"foo_param": [0.0001, 0.1]}
 
     a = dcv.GridSearchCV(
-        MockClassifierWithFitParam(), param_grid, cv=3, refit=False, cache_cv=cache_cv,
+        MockClassifierWithFitParam(),
+        param_grid,
+        cv=3,
+        refit=False,
+        cache_cv=cache_cv,
     )
     b = GridSearchCV(MockClassifierWithFitParam(), param_grid, cv=3, refit=False)
 
